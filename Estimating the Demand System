@@ -1,0 +1,58 @@
+#packages needing installations across deliverables
+!pip install CFEDemands
+!pip install xarray
+!pip install wbdata
+
+#all imports neeeded for dataframing and visualizations
+import datascience as ds
+import numpy as np
+import plotly.offline as py
+import plotly.graph_objs as go
+import pandas as pd
+import wbdata as wb
+from ipywidgets import interact, interactive, Dropdown, IntSlider
+import ipywidgets as widgets
+import matplotlib.pyplot as plt
+%matplotlib inline
+import matplotlib.cm as cm
+import cfe
+import xarray
+
+#function to pull data from Google Sheets and construct data frames that are input into CFE results
+HH_and_Expenditure_Sheet = {'P3 HH/E Characteristics':'1RpMK9oo6knSG_eJMTdUJltq937WlIqAK0IE5inTLvfQ',
+        }
+Sheets = HH_and_Expenditure_Sheet
+def dataframe_from_gspreadsheet(sheet_name, key):
+    url = 'https://docs.google.com/spreadsheets/d/{key}/gviz/tq?tqx=out:csv&sheet={sheet_name}&headers=1'.format(
+        key=key, sheet_name=sheet_name.replace(' ', '%20'))
+    df = pd.read_csv(url)
+    return df.drop([col for col in df.columns if col.startswith('Unnamed')], axis=1)
+x = dataframe_from_gspreadsheet("Nigeria Expenditures", HH_and_Expenditure_Sheet['P3 HH/E Characteristics'])
+c = dataframe_from_gspreadsheet('Nigeria 2010 Consumption', HH_and_Expenditure_Sheet['P3 HH/E Characteristics'])
+z = dataframe_from_gspreadsheet("Nigeria HH Characteristics", HH_and_Expenditure_Sheet['P3 HH/E Characteristics'])
+z['m'] = 1
+x['m'] = 1
+y = np.log(x.replace(0,np.nan).set_index(['j','t','m']))
+z.set_index(['j','t','m'],inplace=True)
+
+#constructing CFE Result interfaces
+result = cfe.Result(y=y,z=z)
+result.get_reduced_form()
+result
+
+#manipulating CFE Result Interfaces
+result.get_alpha().to_dataframe()
+result.delta.to_dataframe().unstack('k')
+result.get_beta().to_dataframe()
+
+#graphing estimates vs actual data
+xbar = np.exp(result.y).sum(['m','i']).to_dataframe('xbar').replace(0,np.nan).squeeze()
+xhat = result.get_predicted_expenditures().sum(['m','i']).to_dataframe('xhat').replace(0,np.nan).squeeze()
+df = pd.DataFrame({'Actual':np.log(xbar),'Predicted':np.log(xhat)})
+df.plot.scatter(x='Predicted',y='Actual')
+v = plt.axis()
+vmin = np.max([v[0],v[2]])
+vmax = np.max([v[1],v[3]])
+plt.plot([vmin,vmax],[vmin,vmax])
+
+
