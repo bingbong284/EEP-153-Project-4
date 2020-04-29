@@ -1,0 +1,92 @@
+#Using WBData to construct the GDP per capita in LCU (Local currency units) to eliminate the inflation of GDP per capita in USD
+nigeria_country_code = 'NGA'
+variable_labels = {'SP.POP.TOTL': 'Population'}
+nigeria_pop = wb.get_dataframe(variable_labels, "NGA").loc[:, 'Population'].values[1]
+nigeria_gdp = 'NY.GDP.MKTP.KN' 
+years = [2010, 2012, 2015, 2018]
+gdp_label = {nigeria_gdp :"GDP"}
+nigeria_gdp = wb.get_dataframe(gdp_label, country = "NGA").loc[:, "GDP"].values[1]
+nigeria_gdp_lcu = nigeria_gdp/nigeria_pop
+print("Nigeria's GDP per capita in LCU is " + str(round(nigeria_gdp_lcu,2)))
+
+#taking this GDP per capita in LCU to determine the average weekly income
+def nigeria_naira_converter_per_week(x):
+    one_naira = 0.0028
+    naira_to_usd = x*0.0028
+    weekly_income = naira_to_usd/52
+    return str(round(weekly_income,2))
+print("Nigeria's per capita weekly income based on GDP per capita is $" + nigeria_naira_converter_per_week(nigeria_gdp_lcu))
+
+#Pulling the prices data from a Google Sheet
+df = dataframe_from_gspreadsheet('Product Prices', HH_and_Expenditure_Sheet['P3 HH/E Characteristics'])
+df['Price'] = df['Price'].astype(float)
+df['Quantity'] = df['Quantity'].astype(float)
+df['FDC_1'] = df['FDC_1'].astype(int)
+df
+
+#Importing FDC data for US nutrient data
+import fooddatacentral as fdc
+import warnings
+D = {}
+count = 0
+for food in  df.Food.tolist():
+    try:
+        FDC = df.loc[df.Food==food,:].FDC_1[count]
+        count+=1
+        D[food] = fdc.nutrients(apikey[user],FDC).Quantity
+    except AttributeError: 
+        warnings.warn("Couldn't find FDC Code %s for food %s." % (food,FDC_1))        
+
+D = pd.DataFrame(D,dtype=float)
+
+# Convert food quantities to FDC units and drop any foods with missing data
+df['FDC Quantity'] = df[['Quantity','Units']].T.apply(lambda x : fdc.units(x['Quantity'],x['Units']))
+df.dropna(how='any')
+D
+
+# Creating the diet requirements for seven individuals that made up the average Nigerian home
+group_1 = "M 19-30"
+group_2 = 'F 19-30'
+group_3 = 'F 9-13'
+bmin_1 = pd.read_csv('./diet_minimums.csv').set_index('Nutrition')[group_1]
+bmin_2 = pd.read_csv('./diet_minimums.csv').set_index('Nutrition')[group_2]
+bmin_3 = pd.read_csv('./diet_minimums.csv').set_index('Nutrition')[group_3]
+bmin_10001 = (bmin_1 * 3) + (bmin_2 *3) + (bmin_3)
+bmax_1 = pd.read_csv('./diet_maximums.csv').set_index('Nutrition')[group_1]
+bmax_2 = pd.read_csv('./diet_maximums.csv').set_index('Nutrition')[group_2]
+bmax_3 = pd.read_csv('./diet_maximums.csv').set_index('Nutrition')[group_3]
+bmax_10001 = (bmax_1 * 3) + (bmax_2 *3) + (bmax_3)
+bmin_10001
+
+#combining the list with prices and nutrients
+c = Prices.apply(lambda x:x.magnitude).dropna()
+use = list(set(c.index.tolist()).intersection(D.columns.tolist()))
+c = c[use]
+c
+
+# Drop nutritional information for foods with unknown prices or nutrients, unconstrained rows
+Aall = D[c.index].fillna(0)
+Amin = Aall.loc[bmin_10001.index]
+Amax = Aall.loc[bmax_10001.index]
+A = pd.concat([Amin,-Amax])
+A
+
+#concatting the constraints
+b = pd.concat([bmin_10001,-bmax_10001]) 
+b
+
+#importing package to solve the nutrient problem
+from  scipy.optimize import linprog as lp
+tol = 0
+result = lp(c, -A, -b, method='interior-point')
+result
+
+#prints a series with the amounts of each food consumed and the total cost for meeting all the nutrients
+diet = pd.Series(result.x,index=c.index)
+print("\nYou'll be eating (in 100s of grams or milliliters) for a weekly cost of $" +str(round(result.fun*7,2)) + ":")
+print(diet[diet >= tol])  # Drop items with quantities less than precision of calculation.
+
+#returns a Pandas dataframe with the recommended and consumed nutrients
+family_nutrients = pd.DataFrame({"Outcome":np.abs(A).dot(diet),"Recommendation":np.abs(b)})
+print("\n You'll be eating for a weekly cost of for a weekly cost of $" +str(round(result.fun*7,2)) + ":")
+family_nutrients
