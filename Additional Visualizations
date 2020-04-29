@@ -1,0 +1,122 @@
+#All functions that are used for the various visualizations
+#many functions build off of one another
+def product_expenditure(product, year):
+    if year == 2010:
+        data_frame = x_2010
+    elif year == 2012:
+        data_frame = x_2012
+    elif year == 2015:
+        data_frame = x_2015
+    elif year == 2018:
+        data_frame = x_2018
+    elif year == 'All':
+        data_frame = x
+    product_sum = (data_frame[str(product)].sum())
+    return product_sum
+
+def product_total_expenditure(product):
+    product_sum = (x[str(product)].sum())
+    return product_sum
+
+def expenditure_percent_change(product):
+    final_value = product_expenditure(product, 2018)
+    initial_value = product_expenditure(product, 2010)
+    percent_change = ((final_value-initial_value)/initial_value) * 100
+    return str(round(percent_change, 2)) + '%'
+
+def percent_change_graph(product):
+    product_2010 = product_expenditure(product, 2010)
+    product_2012 = product_expenditure(product, 2012)
+    product_2015 = product_expenditure(product, 2015)
+    product_2018 = product_expenditure(product, 2018)
+    point_1 = (round(((product_2012-product_2010)/product_2010) *100,2)) 
+    point_2 = (round(((product_2015-product_2012)/product_2015) *100,2))
+    point_3 = (round(((product_2018-product_2015)/product_2018) *100,2))
+    years_array = ds.make_array(2012, 2015, 2018)
+    product_array = ds.make_array(product, product, product)
+    percent_change_array = ds.make_array(point_1, point_2, point_3)
+    graph_df = pd.DataFrame({
+        'Product':product_array, 
+        'Year':years_array, 
+        'Percent Change':percent_change_array
+    })
+    return graph_df.plot.line(x = 'Year', y = 'Percent Change', title = str(product) + ' Expenditure Percent Chage')
+
+def gdp_per_capita_df():
+    years_list = [2010, 2012, 2015, 2018]
+    gdp_per_capita_list = [344549.92, 432649.56, 525444.83, 659159.14]
+    inflation_rate_list = ['13.72%', '12.22%', '9.01%', '12.1%']
+    gdp_per_capita_df = pd.DataFrame({
+        'Year':years_list, 
+        'GDP per Capita (LCU)':gdp_per_capita_list,
+        'Inflation Rate':inflation_rate_list
+    })
+    return gdp_per_capita_df 
+
+def gdp_per_capita_percent_change():
+    final_value = gdp_per_capita_df().loc[:, 'GDP per Capita (LCU)'].values[3]
+    initial_value = gdp_per_capita_df().loc[:, 'GDP per Capita (LCU)'].values[0]
+    percent_change = ((final_value-initial_value)/initial_value) * 100
+    return str(round(percent_change, 2)) + '%'
+
+def gdp_per_capita_percent_change_graph():
+    gdp_2010 =  gdp_per_capita_df().loc[:, 'GDP per Capita (LCU)'].values[0]
+    gdp_2012 =  gdp_per_capita_df().loc[:, 'GDP per Capita (LCU)'].values[1]
+    gdp_2015 =  gdp_per_capita_df().loc[:, 'GDP per Capita (LCU)'].values[2] 
+    gdp_2018 =  gdp_per_capita_df().loc[:, 'GDP per Capita (LCU)'].values[3]
+    point_1 = (round(((gdp_2012-gdp_2010)/gdp_2010) *100,2)) 
+    point_2 = (round(((gdp_2015-gdp_2012)/gdp_2015) *100,2))
+    point_3 = (round(((gdp_2018-gdp_2015)/gdp_2018) *100,2))
+    years_array = ds.make_array(2012, 2015, 2018)
+    gdp_array = ds.make_array(gdp_2012, gdp_2015, gdp_2018)
+    percent_change_array = ds.make_array(point_1, point_2, point_3)
+    gdp_graph_df = pd.DataFrame({
+        'GDP per Capita (LCU)':gdp_array, 
+        'Year':years_array, 
+        'Percent Change':percent_change_array
+    })
+    return gdp_graph_df.plot.line(x = 'Year', y = 'Percent Change', title = 'GDP per Capita (LCU) Percent Chage')
+
+def interactable_estimate_graph(estimate_rate):
+    xbar = np.exp(result.y).sum(['m','i']).to_dataframe('xbar').replace(0,np.nan).squeeze()
+    xhat = result.get_predicted_expenditures().sum(['m','i']).to_dataframe('xhat').replace(0,np.nan).squeeze()
+    df = pd.DataFrame({'Actual':np.log(estimate_rate*xbar),'Predicted':np.log(xhat)})
+    df.plot.scatter(x='Predicted',y='Actual')
+    v = plt.axis()
+    vmin = np.max([v[0],v[2]])
+    vmax = np.max([v[1],v[3]])
+    return plt.plot([vmin,vmax],[vmin,vmax])
+    
+def average_product_expenditure(product):
+    product_average = (x[str(product)].mean())
+    return product_average
+    
+def average_product_expenditure_per_person(product):
+    product_average = (x[str(product)]).mean()
+    household_average_size = int(household_mean_df()['Average Household Size']) + .72
+    per_person_average_expenditure = product_average/household_average_size
+    return per_person_average_expenditure
+    
+#interactable average household expenditure by product 
+interact(lambda Products:
+         print(("Average Household Expenditure: " + str(average_product_expenditure(product = Products)))), 
+        Products=Dropdown(options=np.unique(Products)));
+        
+#interactable total expenditure by product 
+interact(lambda Products:
+         print(("Total Expenditure: $" + str(product_total_expenditure(product = Products)))), 
+        Products=Dropdown(options=np.unique(Products)));
+        
+#interactable percent change in the product expenditure over the four years in the data         
+interact(lambda Products:
+         print(("Percent Change: " + str(expenditure_percent_change(product = Products)))), 
+        Products=Dropdown(options=np.unique(Products)));
+#interactable estimate graph (changing the factor multiplies the budget out or in)
+interact(lambda Factor:
+         print((interactable_estimate_graph(estimate_rate = Factor))), 
+        Factor=Dropdown(options=np.unique(Factor)));
+        
+#interactable LN graph      
+interact(lambda Products:
+         print((ln_graph(product = Products))), 
+        Products=Dropdown(options=np.unique(Products)));
